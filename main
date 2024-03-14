@@ -1,3 +1,5 @@
+
+Function strOneDriveLocalFilePath() As String
 On Error Resume Next 'invalid or non existin registry keys check would evaluate error
     Dim ShellScript As Object
     Dim strOneDriveLocalPath As String
