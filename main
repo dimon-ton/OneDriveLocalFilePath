@@ -1,0 +1,78 @@
+On Error Resume Next 'invalid or non existin registry keys check would evaluate error
+    Dim ShellScript As Object
+    Dim strOneDriveLocalPath As String
+    Dim strFileURL As String
+    Dim iTryCount As Integer
+    Dim strRegKeyName As String
+    Dim strFileEndPath As String
+    Dim iDocumentsPosition As Integer
+    Dim i4thSlashPosition As Integer
+    Dim iSlashCount As Integer
+    Dim blnFileExist As Boolean
+    Dim objFSO As Object
+    
+    strFileURL = ThisWorkbook.Path
+    
+    
+    'get OneDrive local path from registry
+    Set ShellScript = CreateObject("WScript.Shell")
+    '3 possible registry keys to be checked
+    For iTryCount = 1 To 3
+        Select Case (iTryCount)
+            Case 1:
+                strRegKeyName = "OneDriveCommercial"
+            Case 2:
+                strRegKeyName = "OneDriveConsumer"
+            Case 3:
+                strRegKeyName = "OneDrive"
+        End Select
+        strOneDriveLocalPath = ShellScript.RegRead("HKEY_CURRENT_USER\Environment\" & strRegKeyName)
+    
+        'check if OneDrive location found
+        If strOneDriveLocalPath <> vbNullString Then
+            'for commercial OneDrive file path seems to be like "https://companyName-my.sharepoint.com/personal/userName_domain_com/Documents" & file.FullName)
+            If InStr(1, strFileURL, "my.sharepoint.com") <> 0 Then
+                'find "/Documents" in string and replace everything before the end with OneDrive local path
+                iDocumentsPosition = InStr(1, strFileURL, "/Documents") + Len("/Documents") 'find "/Documents" position in file URL
+                strFileEndPath = Mid(strFileURL, iDocumentsPosition, Len(strFileURL) - iDocumentsPosition + 1)  'get the ending file path without pointer in OneDrive
+            Else
+                'do nothing
+            End If
+            'for personal onedrive it looks like "https://d.docs.live.net/d7bbaa#######1/" & file.FullName, _
+            '   by replacing "https.." with OneDrive local path obtained from registry we can get local file path
+            If InStr(1, strFileURL, "d.docs.live.net") <> 0 Then
+                iSlashCount = 1
+                i4thSlashPosition = 1
+                Do Until iSlashCount > 4
+                    i4thSlashPosition = InStr(i4thSlashPosition + 1, strFileURL, "/")   'loop 4 times, looking for "/" after last found
+                    iSlashCount = iSlashCount + 1
+                Loop
+                strFileEndPath = Mid(strFileURL, i4thSlashPosition, Len(strFileURL) - i4thSlashPosition + 1)  'get the ending file path without pointer in OneDrive
+            Else
+                'do nothing
+            End If
+        Else
+            'continue to check next registry key
+        End If
+        If Len(strFileEndPath) > 0 Then 'check if path found
+            strFileEndPath = Replace(strFileEndPath, "/", "\")  'flip slashes from URL type to File path type
+            strOneDriveLocalFilePath = strOneDriveLocalPath & strFileEndPath    'this is the final file path on Local drive
+            'verify if file exist in this location and exit for loop if True
+            If objFSO Is Nothing Then Set objFSO = CreateObject("Scripting.FileSystemObject")
+            If objFSO.FileExist(strOneDriveLocalFilePath) Then
+                blnFileExist = True     'that is it - WE GOT IT
+                Exit For                'terminate for loop
+            Else
+                blnFileExist = False    'not there try another OneDrive type (personal/business)
+            End If
+        Else
+            'continue to check next registry key
+        End If
+    Next iTryCount
+    'display message if file could not be located in any OneDrive folders
+    If Not blnFileExist Then MsgBox "File could not be found in any OneDrive folders"
+    
+    'clean up
+    Set ShellScript = Nothing
+    Set objFSO = Nothing
+End Function
